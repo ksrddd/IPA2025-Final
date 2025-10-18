@@ -1,9 +1,10 @@
 # gigabit_status function using Netmiko
 from netmiko import ConnectHandler
+import os
 
-device_ip = "10.0.15.65"   # <!!!REPLACEME with router IP address!!!>
-username = "admin"
-password = "cisco"
+device_ip = os.environ.get("ROUTER_IP", "10.0.15.63")
+username = os.environ.get("ROUTER_USER", "admin")
+password = os.environ.get("ROUTER_PASS", "cisco")
 
 device_params = {
     "device_type": "cisco_ios",   # <!!!REPLACEME with device type for netmiko!!!>

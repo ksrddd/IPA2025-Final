@@ -1,12 +1,12 @@
 from netmiko import ConnectHandler
 from pprint import pprint
 
-device_ip = "<!!!REPLACEME with router IP address!!!>"
+device_ip = "10.0.15.65"   # <!!!REPLACEME with router IP address!!!>
 username = "admin"
 password = "cisco"
 
 device_params = {
-    "device_type": "<!!!REPLACEME with device type for netmiko!!!>",
+    "device_type": "cisco_ios",   # <!!!REPLACEME with device type for netmiko!!!>
     "ip": device_ip,
     "username": username,
     "password": password,
@@ -16,19 +16,64 @@ device_params = {
 def gigabit_status():
     ans = ""
     with ConnectHandler(**device_params) as ssh:
-        up = 0
-        down = 0
-        admin_down = 0
-        result = ssh.send_command("<!!!REPLACEME with proper command!!!>", use_textfsm=True)
-        for status in result:
-            if <!!!Write code here!!!>:
-                <!!!Write code here!!!>
-                if <!!!Write code here!!!> == "up":
-                    up += 1
-                elif <!!!Write code here!!!> == "down":
-                    down += 1
-                elif <!!!Write code here!!!> == "administratively down":
+        up = down = admin_down = 0
+
+        # พยายามใช้ TextFSM ก่อน
+        result = ssh.send_command("show ip interface brief", use_textfsm=True)
+
+        iface_list = []
+
+        if isinstance(result, list):
+            # โหมด parsed โดย TextFSM: list[dict]
+            for item in result:
+                # ดึงชื่ออินเทอร์เฟซ/สถานะ/โปรโตคอลแบบยืดหยุ่น
+                name   = item.get("intf") or item.get("interface") or ""
+                status = (item.get("status") or item.get("Status") or "").lower()
+                proto  = (item.get("proto")  or item.get("protocol") or "").lower()
+
+                if not name.startswith("GigabitEthernet"):
+                    continue
+
+                # normalize status
+                if "administratively" in status:
+                    iface_list.append(f"{name} administratively down")
                     admin_down += 1
-        ans = <!!!Write code here!!!>
-        pprint(ans)
+                elif status == "up" and (proto == "up" or proto == ""):
+                    iface_list.append(f"{name} up")
+                    up += 1
+                else:
+                    iface_list.append(f"{name} down")
+                    down += 1
+
+        else:
+            # Fallback: พาร์สข้อความดิบ
+            raw = result if isinstance(result, str) else ssh.send_command("show ip interface brief")
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line.startswith("GigabitEthernet"):
+                    continue
+                cols = line.split()
+                name = cols[0]
+                # โปรโตคอลคือคอลัมน์สุดท้ายเสมอ
+                proto = cols[-1].lower()
+                # สถานะก่อนสุดท้าย อาจเป็นคำเดียว (up/down) หรือสองคำ ("administratively down")
+                if "administratively" in line:
+                    status = "administratively down"
+                else:
+                    status = cols[-2].lower()
+
+                if status == "administratively down":
+                    iface_list.append(f"{name} administratively down")
+                    admin_down += 1
+                elif status == "up" and (proto == "up" or proto == ""):
+                    iface_list.append(f"{name} up")
+                    up += 1
+                else:
+                    iface_list.append(f"{name} down")
+                    down += 1
+
+        iface_summary = ", ".join(iface_list)
+        ans = f"{iface_summary} -> {up} up, {down} down, {admin_down} administratively down"
+        print(ans)
         return ans
+

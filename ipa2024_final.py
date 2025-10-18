@@ -106,7 +106,6 @@ while True:
             responseMessage = netmiko_final.gigabit_status()
         elif command == "showrun":
             ok, file_path, router_name = ansible_final.run_showrun_playbook()
-            # ตามสเปค: ถ้าสำเร็จให้แนบไฟล์; ถ้าล้มเหลวส่ง "Error: Ansible"
             responseMessage = "ok" if ok and file_path else "Error: Ansible"
         else:
             responseMessage = "Error: No command or unknown command"

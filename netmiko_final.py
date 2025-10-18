@@ -1,5 +1,5 @@
+# gigabit_status function using Netmiko
 from netmiko import ConnectHandler
-from pprint import pprint
 
 device_ip = "10.0.15.65"   # <!!!REPLACEME with router IP address!!!>
 username = "admin"

@@ -1,7 +1,7 @@
 #######################################################################################
 # Yourname: Sukhum Rudeemaetakul
 # Your student ID: 66070315
-# Your GitHub Repo: 
+# Your GitHub Repo: https://github.com/sukhumrudee/IPA2024-Final-66070315.git
 #######################################################################################
 
 # 1. Import libraries for API requests, JSON formatting, time, os,

@@ -104,7 +104,8 @@ while True:
         elif command == "gigabit_status":
             responseMessage = netmiko_final.gigabit_status()
         elif command == "showrun":
-            # showrun() ของคุณรีเทิร์น "ok" เมื่อ playbook สำเร็จ
+            # showrun() ของคุณรีเทิร์น "ส่งไฟล์ running-config แล้ว ✅" เมื่อ playbook สำเร็จ
+            # (ไม่รีเทิร์น "ok" อีกแล้ว เพื่อกันส่งซ้ำ)
             responseMessage = ansible_final.showrun()
         else:
             responseMessage = "Error: No command or unknown command"
@@ -123,52 +124,23 @@ while True:
         # Read Send a Message with Attachments Local File Attachments
         # https://developer.webex.com/docs/basics for more detail
 
-        if command == "showrun" and responseMessage == "ok":
-            # ตั้งชื่อไฟล์ที่ playbook เซฟไว้ เช่น show_run_<studentID>_<router>.txt
-            router_name = "R3-Exam"   # ให้ตรงกับที่ playbook ตั้งชื่อ
-            filename = f"show_run_{STUDENT_ID}_{router_name}.txt"
-
-            # เผื่อไฟล์อยู่ใน ./ หรือ ./ansible/
-            candidates = [filename, os.path.join("ansible", filename)]
-            filepath = next((p for p in candidates if os.path.exists(p)), None)
-
-            if not filepath:
-                # ไม่พบไฟล์ -> แจ้ง Error แบบข้อความ
-                postData = {"roomId": roomIdToGetMessages, "text": "Error: Ansible"}
-                r = requests.post(
-                    "https://webexapis.com/v1/messages",
-                    data=json.dumps(postData),
-                    headers={
-                        "Authorization": f"Bearer {ACCESS_TOKEN}",
-                        "Content-Type": "application/json",
-                    },
+        # ปรับให้ showrun ไม่เข้าเงื่อนไขแนบไฟล์ซ้ำ
+        if command == "showrun":
+            # ansible_final ส่งไฟล์ให้แล้ว → main แค่ส่งข้อความแจ้งผล
+            postData = {"roomId": roomIdToGetMessages, "text": responseMessage}
+            r = requests.post(
+                "https://webexapis.com/v1/messages",
+                data=json.dumps(postData),
+                headers={
+                    "Authorization": f"Bearer {ACCESS_TOKEN}",
+                    "Content-Type": "application/json",
+                },
+            )
+            if r.status_code != 200:
+                raise Exception(
+                    f"Incorrect reply from Webex Teams API. Status code: {r.status_code}"
                 )
-                if r.status_code != 200:
-                    raise Exception(
-                        f"Incorrect reply from Webex Teams API. Status code: {r.status_code}"
-                    )
-            else:
-                filetype = "text/plain"
-                with open(filepath, "rb") as fileobject:
-                    postData = MultipartEncoder({
-                        "roomId": roomIdToGetMessages,
-                        "text": "show running config",
-                        "files": (os.path.basename(filepath), fileobject, filetype),
-                    })
-                    HTTPHeaders = {
-                        # ✅ เติม Bearer เพื่อแก้ 401
-                        "Authorization": f"Bearer {ACCESS_TOKEN}",
-                        "Content-Type": postData.content_type,
-                    }
-                    r = requests.post(
-                        "https://webexapis.com/v1/messages",
-                        data=postData,
-                        headers=HTTPHeaders,
-                    )
-                    if r.status_code != 200:
-                        raise Exception(
-                            f"Incorrect reply from Webex Teams API. Status code: {r.status_code}"
-                        )
+
         else:
             # other commands only send text, or showrun fail -> ส่งข้อความธรรมดา
             postData = {"roomId": roomIdToGetMessages, "text": responseMessage}

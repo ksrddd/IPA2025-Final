@@ -1,7 +1,7 @@
 import requests
 import json
 
-access_token = "My Access Token"
+access_token = "My access token"
 url = 'https://webexapis.com/v1/rooms'
 
 headers = {

@@ -14,18 +14,16 @@ ROUTER_NAME = "R3-Exam"   # เปลี่ยนตาม Pod ของคุ�
 def showrun():
     """
     เรียก ansible-playbook เพื่อ backup running-config
-    แล้วส่งไฟล์ .txt กลับไปที่ Webex Room
+    แล้วส่งไฟล์ .txt กลับไปที่ Webex Room (เพียงครั้งเดียว)
     """
     try:
-        # ---- 1) รัน ansible-playbook (ตั้ง cwd ให้ถูก) ----
+        # ---- 1) รัน ansible-playbook ----
         base_dir = os.path.dirname(os.path.abspath(__file__))
         ansible_dir = os.path.join(base_dir, "ansible")
 
-        # ถ้าไฟล์อยู่ใต้ ansible/ ให้รันจากตรงนั้น
         playbook_path = os.path.join(ansible_dir, "playbook.yml")
         hosts_path = os.path.join(ansible_dir, "hosts")
         if not os.path.exists(playbook_path):
-            # เผื่อคุณวาง playbook ไว้รากโปรเจกต์
             playbook_path = os.path.join(base_dir, "playbook.yml")
             hosts_path = os.path.join(base_dir, "hosts")
 
@@ -34,12 +32,11 @@ def showrun():
         output = (result.stdout or "") + "\n" + (result.stderr or "")
         print(output)
 
-        # ---- 2) ตรวจผลลัพธ์ว่าผ่านไหม ----
-        # ใช้ returncode เป็นหลัก และกันเคสที่ stdout ไม่มีคำว่า failed=0
+        # ---- 2) ตรวจผลลัพธ์ ----
         if result.returncode != 0:
-            return "Error: Ansible"
+            return "Error: Ansible Error"
 
-        # ---- 3) หาไฟล์ที่ถูกสร้างจริง (เช็คทั้งรากและ ansible/) ----
+        # ---- 3) หาไฟล์ที่ถูกสร้าง ----
         filename = f"show_run_{STUDENT_ID}_{ROUTER_NAME}.txt"
         candidates = [
             os.path.join(base_dir, filename),
@@ -53,7 +50,6 @@ def showrun():
         print(f"Sending {filepath} to Webex room...")
 
         url = "https://webexapis.com/v1/messages"
-        # ✅ ต้องมี Bearer นำหน้า token
         headers = {"Authorization": f"Bearer {WEBEX_TOKEN}"}
 
         with open(filepath, "rb") as f:
@@ -65,7 +61,8 @@ def showrun():
             resp = requests.post(url, headers=headers, files=files)
 
         if resp.status_code == 200:
-            return "ok"
+            # ✅ เปลี่ยนข้อความไม่ให้เป็น "ok" ป้องกันส่งซ้ำ
+            return "Received message: sent running-config file completed"
         else:
             print("Webex response:", resp.status_code, resp.text)
             return f"Error sending file to Webex (HTTP {resp.status_code})"

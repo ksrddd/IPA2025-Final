@@ -1,8 +1,8 @@
 Building configuration...
 
-Current configuration : 3995 bytes
+Current configuration : 4005 bytes
 !
-! Last configuration change at 23:37:36 UTC Sat Oct 18 2025 by NETCONF
+! Last configuration change at 13:29:48 UTC Sun Oct 19 2025 by NETCONF
 !
 version 16.9
 service timestamps debug datetime msec
@@ -137,6 +137,7 @@ interface Loopback66070007
 interface Loopback66070315
  description Student 66070315 loopback
  ip address 172.3.15.1 255.255.255.0
+ shutdown
 !
 interface GigabitEthernet1
  ip address 10.0.15.63 255.255.255.0

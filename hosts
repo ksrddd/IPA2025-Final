@@ -1,2 +1,0 @@
-[routers]
-R3-Exam ansible_host=10.0.15.63 ansible_user=admin ansible_password=cisco ansible_network_os=cisco.ios.ios ansible_command_timeout=180 ansible_connect_timeout=60

@@ -1,0 +1,51 @@
+---
+- name: Show running-config from Cisco IOS device
+  hosts: routers
+  gather_facts: no
+  connection: network_cli
+
+  tasks:
+    - name: Run 'show running-config'
+      cisco.ios.ios_command:
+        commands:
+          - show running-config
+      register: showrun_out
+
+    - name: Get hostname line
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include ^hostname
+      register: host_out
+
+    - name: Ensure output directory exists
+      file:
+        path: outputs
+        state: directory
+
+    # --- ตั้งค่าเริ่มต้น: ใช้ inventory_hostname เป็น router_name ---
+    - name: Set default router_name to inventory_hostname
+      set_fact:
+        router_name: "{{ inventory_hostname }}"
+
+    # --- ถ้าบรรทัดที่ได้ "ขึ้นต้นด้วย hostname " ค่อยตัดเอาชื่อจริงออกมา ---
+    - name: Override router_name from hostname line (if present)
+      set_fact:
+        router_name: "{{ host_out.stdout[0] | regex_replace('^hostname\\s+','') }}"
+      when:
+        - host_out.stdout is defined
+        - host_out.stdout | length > 0
+        - host_out.stdout[0] is match('^hostname\\s+')
+
+    - name: Build destination path
+      set_fact:
+        dest_path: >-
+          outputs/show_run_{{ lookup('env', 'STUDENT_ID') | default('66070239') }}_{{ router_name }}.txt
+
+    - name: Save running-config to file (unique per device)
+      copy:
+        content: "{{ showrun_out.stdout[0] }}"
+        dest: "{{ dest_path }}"
+
+    - name: Display summary
+      debug:
+        msg: "Saved running-config to {{ dest_path }}"

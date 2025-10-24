@@ -1,0 +1,15 @@
+[iosxe]
+10.0.15.61
+10.0.15.62
+10.0.15.63
+10.0.15.64
+10.0.15.65
+
+[iosxe:vars]
+ansible_connection=ansible.netcommon.network_cli
+ansible_network_cli_ssh_type=paramiko
+ansible_network_os=cisco.ios.ios
+ansible_user=admin
+ansible_password=cisco
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args=-o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1

@@ -1,0 +1,18 @@
+---
+- name: Set MOTD banner via ios_banner
+  hosts: iosxe
+  gather_facts: no
+  vars:
+    target_ip: "{{ target_ip | default('') }}"
+    motd_msg: "{{ motd_msg | default('Authorized users only!') }}"
+  tasks:
+    - name: Add host dynamically
+      add_host:
+        name: "{{ target_ip }}"
+        groups: iosxe
+
+    - name: Ensure MOTD is configured
+      cisco.ios.ios_banner:
+        banner: motd
+        text: "{{ motd_msg }}"
+        state: present

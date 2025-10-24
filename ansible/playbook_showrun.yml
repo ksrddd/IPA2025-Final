@@ -22,12 +22,10 @@
         path: outputs
         state: directory
 
-    # --- ตั้งค่าเริ่มต้น: ใช้ inventory_hostname เป็น router_name ---
     - name: Set default router_name to inventory_hostname
       set_fact:
         router_name: "{{ inventory_hostname }}"
 
-    # --- ถ้าบรรทัดที่ได้ "ขึ้นต้นด้วย hostname " ค่อยตัดเอาชื่อจริงออกมา ---
     - name: Override router_name from hostname line (if present)
       set_fact:
         router_name: "{{ host_out.stdout[0] | regex_replace('^hostname\\s+','') }}"

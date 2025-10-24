@@ -1,159 +1,152 @@
 #######################################################################################
 # Yourname: Sukhum Rudeemaetakul
 # Your student ID: 66070315
-# Your GitHub Repo: https://github.com/sukhumrudee/IPA2024-Final-66070315.git
+# Your GitHub Repo: https://github.com/ksrddd/IPA2025-Final.git
 #######################################################################################
-
-# 1. Import libraries for API requests, JSON formatting, time, os,
-#    (restconf_final or netconf_final), netmiko_final, and ansible_final.
 
 import os
 import time
 import json
 import requests
-from requests_toolbelt.multipart.encoder import MultipartEncoder
 from dotenv import load_dotenv
 load_dotenv()
 
-# ใช้ RESTCONF ตามที่ทำไว้ (ถ้าใช้ NETCONF ให้เปลี่ยน import ตรงนี้)
 import restconf_final
+import netconf_final
 import netmiko_final
 import ansible_final
 
-#######################################################################################
-# 2. Assign the Webex access token to the variable ACCESS_TOKEN using environment variables.
-
 ACCESS_TOKEN = os.environ.get("WEBEX_TOKEN", "")
-
-# (แนะนำเพิ่มตัวแปรจาก ENV เพื่อใช้ตรวจ prefix คำสั่ง และห้อง Webex)
 STUDENT_ID = os.environ.get("STUDENT_ID", "").strip()
 if not STUDENT_ID:
     raise RuntimeError("Missing STUDENT_ID in environment variables.")
 
-#######################################################################################
-# 3. Prepare parameters get the latest message for messages API.
-
-# Defines a variable that will hold the roomId
 roomIdToGetMessages = os.environ.get("WEBEX_ROOM_ID", "")
 if not roomIdToGetMessages:
     raise RuntimeError("Missing WEBEX_ROOM_ID in environment variables.")
 
+# ============================ CONFIG ============================
+ALLOWED_IPS = {"10.0.15.61", "10.0.15.62", "10.0.15.63", "10.0.15.64", "10.0.15.65"}
+CURRENT_METHOD = None   # "restconf" | "netconf"
+# ===============================================================
+
+def set_method(m):
+    global CURRENT_METHOD
+    if m not in ("restconf", "netconf"):
+        return "Error: No method specified"
+    CURRENT_METHOD = m
+    return "Ok: Restconf" if m == "restconf" else "Ok: Netconf"
+
+def dispatch_command(method: str, router_ip: str, cmd: str, args: list[str]) -> str:
+    """ส่งต่อคำสั่งไปยังโมดูลตาม method (ส่วนที่ 1)"""
+    label = "Restconf" if method == "restconf" else "Netconf"
+
+    if method == "restconf":
+        base = restconf_final.handle_command(cmd, router_ip)
+    else:
+        base = netconf_final.handle_command(cmd, router_ip)
+
+    if cmd in ("create", "delete", "enable", "disable"):
+        if "successfully" in base:
+            return f"{base} using {label}"
+        if cmd == "disable" and base.startswith("Cannot shutdown:"):
+            return f"{base} (checked by {label})"
+        return base
+    if cmd == "status":
+        return f"{base} (checked by {label})"
+    return base
+
+
+# ===============================================================
+# MAIN LOOP
+# ===============================================================
 while True:
-    # always add 1 second of delay to the loop to not go over a rate limit of API calls
     time.sleep(1)
-
-    # the Webex Teams GET parameters
-    #  "roomId" is the ID of the selected room
-    #  "max": 1  limits to get only the very last message in the room
     getParameters = {"roomId": roomIdToGetMessages, "max": 1}
-
-    # the Webex Teams HTTP header, including the Authoriztion
     getHTTPHeader = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
-    # 4. Provide the URL to the Webex Teams messages API, and extract location from the received message.
+    r = requests.get("https://webexapis.com/v1/messages",
+                     params=getParameters, headers=getHTTPHeader)
+    if r.status_code != 200:
+        continue
 
-    # Send a GET request to the Webex Teams messages API.
-    # - Use the GetParameters to get only the latest message.
-    # - Store the message in the "r" variable.
-    r = requests.get(
-        "https://webexapis.com/v1/messages",
-        params=getParameters,
-        headers=getHTTPHeader,
-    )
-    # verify if the retuned HTTP status code is 200/OK
-    if not r.status_code == 200:
-        raise Exception(
-            "Incorrect reply from Webex Teams API. Status code: {}".format(r.status_code)
-        )
+    data = r.json()
+    items = data.get("items", [])
+    if not items:
+        continue
 
-    # get the JSON formatted returned data
-    json_data = r.json()
+    message = items[0].get("text", "") or ""
+    print("Received message:", message)
 
-    # check if there are any messages in the "items" array
-    if len(json_data["items"]) == 0:
-        raise Exception("There are no messages in the room.")
+    if not message.startswith(f"/{STUDENT_ID}"):
+        continue
 
-    # store the array of messages
-    messages = json_data["items"]
+    tail = message[len(f"/{STUDENT_ID}"):].strip()
+    if not tail:
+        continue
 
-    # store the text of the first message in the array
-    message = messages[0].get("text", "")
-    print("Received message: " + message)
+    tokens = tail.split()
+    reply = None  # ถ้า None จะไม่ส่งโพสต์ซ้ำ (เช่น showrun ที่ส่งไฟล์ในฟังก์ชันแล้ว)
 
-    # check if the text of the message starts with the magic character "/"
-    # followed by your studentID and a space and followed by a command name
-    #  e.g.  "/66070123 create"
-    if message.startswith(f"/{STUDENT_ID} "):
+    # --- /SID showrun (ไม่มี IP) ---
+    if len(tokens) == 1 and tokens[0].lower() == "showrun":
+        reply = "Error: No IP specified"
 
-        # extract the command
-        command = message.split(maxsplit=1)[1].strip().lower()
-        print(command)
+    # --- /SID restconf | netconf ---
+    elif len(tokens) == 1 and tokens[0].lower() in ("restconf", "netconf"):
+        reply = set_method(tokens[0].lower())
 
-        # 5. Complete the logic for each command
+    # --- /SID <IP> ---
+    elif len(tokens) == 1 and tokens[0].count(".") == 3:
+        reply = "Error: No command found."
 
-        if command == "create":
-            responseMessage = restconf_final.handle_command("create")
-        elif command == "delete":
-            responseMessage = restconf_final.handle_command("delete")
-        elif command == "enable":
-            responseMessage = restconf_final.handle_command("enable")
-        elif command == "disable":
-            responseMessage = restconf_final.handle_command("disable")
-        elif command == "status":
-            responseMessage = restconf_final.handle_command("status")
-        elif command == "gigabit_status":
-            responseMessage = netmiko_final.gigabit_status()
-        elif command == "showrun":
-            # showrun() ของคุณรีเทิร์น "ส่งไฟล์ running-config แล้ว ✅" เมื่อ playbook สำเร็จ
-            # (ไม่รีเทิร์น "ok" อีกแล้ว เพื่อกันส่งซ้ำ)
-            responseMessage = ansible_final.showrun()
-        else:
-            responseMessage = "Error: No command or unknown command"
+    # --- /SID <IP> <command> [args...] ---
+    elif tokens[0].count(".") == 3 and len(tokens) >= 2:
+        ip  = tokens[0]
+        cmd = tokens[1].lower()
+        args = tokens[2:]
 
-        # 6. Complete the code to post the message to the Webex Teams room.
+        # ✅ MOTD — ใช้ได้กับทุก IP (ตามข้อสอบ)
+        if cmd == "motd":
+            if args:
+                ok = ansible_final.set_motd(ip, " ".join(args))
+                reply = "Ok: success" if ok else "Error: failed to configure MOTD"
+            else:
+                motd = netmiko_final.read_motd(ip)
+                reply = motd if motd else "Error: No MOTD Configured"
 
-        # The Webex Teams POST JSON data for command showrun
-        # - "roomId" is is ID of the selected room
-        # - "text": is always "show running config"
-        # - "files": is a tuple of filename, fileobject, and filetype.
+        # จากนี้ไป: ต้องเป็น IP target เท่านั้น
+        elif cmd in ("gigabit_status", "gi-status", "gigabit"):
+            if ip not in ALLOWED_IPS:
+                reply = "Error: No IP specified"
+            else:
+                result = netmiko_final.gigabit_status(ip)
+                reply = result or "Error: gi-status failed"
 
-        # the Webex Teams HTTP headers, including the Authoriztion and Content-Type
-
-        # Prepare postData and HTTPHeaders for command showrun
-        # Need to attach file if responseMessage is 'ok';
-        # Read Send a Message with Attachments Local File Attachments
-        # https://developer.webex.com/docs/basics for more detail
-
-        # ปรับให้ showrun ไม่เข้าเงื่อนไขแนบไฟล์ซ้ำ
-        if command == "showrun":
-            # ansible_final ส่งไฟล์ให้แล้ว → main แค่ส่งข้อความแจ้งผล
-            postData = {"roomId": roomIdToGetMessages, "text": responseMessage}
-            r = requests.post(
-                "https://webexapis.com/v1/messages",
-                data=json.dumps(postData),
-                headers={
-                    "Authorization": f"Bearer {ACCESS_TOKEN}",
-                    "Content-Type": "application/json",
-                },
-            )
-            if r.status_code != 200:
-                raise Exception(
-                    f"Incorrect reply from Webex Teams API. Status code: {r.status_code}"
-                )
+        elif cmd in ("showrun", "show-run"):
+            if ip not in ALLOWED_IPS:
+                reply = "Error: No IP specified"
+            else:
+                os.environ["ROUTER_IP"] = ip
+                _ = ansible_final.showrun()   # ฟังก์ชันนี้จะโพสต์ไฟล์ + "show running config" เอง
+                reply = None
 
         else:
-            # other commands only send text, or showrun fail -> ส่งข้อความธรรมดา
-            postData = {"roomId": roomIdToGetMessages, "text": responseMessage}
-            r = requests.post(
-                "https://webexapis.com/v1/messages",
-                data=json.dumps(postData),
-                headers={
-                    # ✅ เติม Bearer เพื่อแก้ 401
-                    "Authorization": f"Bearer {ACCESS_TOKEN}",
-                    "Content-Type": "application/json",
-                },
-            )
-            if r.status_code != 200:
-                raise Exception(
-                    f"Incorrect reply from Webex Teams API. Status code: {r.status_code}"
-                )
+            if ip not in ALLOWED_IPS:
+                reply = "Error: No IP specified"
+            elif CURRENT_METHOD is None:
+                reply = "Error: No method specified"
+            else:
+                reply = dispatch_command(CURRENT_METHOD, ip, cmd, args)
+
+    else:
+        reply = "Error: No IP specified"
+
+    if reply is not None:
+        postData = {"roomId": roomIdToGetMessages, "text": reply}
+        rr = requests.post("https://webexapis.com/v1/messages",
+                           data=json.dumps(postData),
+                           headers={"Authorization": f"Bearer {ACCESS_TOKEN}",
+                                    "Content-Type": "application/json"})
+        if rr.status_code != 200:
+            print(f"Error sending message: {rr.status_code}")
